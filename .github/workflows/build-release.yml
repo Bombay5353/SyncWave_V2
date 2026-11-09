@@ -61,7 +61,9 @@ jobs:
         run: npm install --legacy-peer-deps
 
       - name: Package Windows EXE with Electron Builder
-        run: npx electron-builder --win --config electron-builder.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --win --config electron-builder.json --publish never
 
       - name: Upload Windows EXE Artifact
         uses: actions/upload-artifact@v4
@@ -71,7 +73,7 @@ jobs:
           if-no-files-found: warn
 
   # ------------------------------------------------------------
-  # 3. BUILD ANDROID .APK PACKAGE (Using Pre-installed Android SDK)
+  # 3. BUILD ANDROID .APK PACKAGE (Using Java 21 for Capacitor 7)
   # ------------------------------------------------------------
   build-android-apk:
     needs: build-web
@@ -85,11 +87,11 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Setup Java JDK 17
+      - name: Setup Java JDK 21 (Required for Capacitor 7)
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '21'
 
       - name: Accept Android SDK Licenses
         run: |
@@ -149,6 +151,8 @@ jobs:
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: v1.0.${{ github.run_number }}
           name: SyncWave Studio v1.0.${{ github.run_number }} (EXE & APK)

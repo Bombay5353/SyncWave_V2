@@ -13,6 +13,7 @@
   "extraMetadata": {
     "main": "electron/main.cjs"
   },
+  "publish": null,
   "win": {
     "target": [
       {
