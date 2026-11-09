@@ -122,8 +122,18 @@ app.post('/api/chat', async (req: Request, res: Response) => {
 
     if (!response.ok) {
       const errorText = await response.text();
+      let errorMsg = `NVIDIA API responded with status ${response.status}`;
+      try {
+        const errorJson = JSON.parse(errorText);
+        if (errorJson.error?.message) {
+          errorMsg = errorJson.error.message;
+        } else if (errorJson.message) {
+          errorMsg = errorJson.message;
+        }
+      } catch (e) {}
+
       res.status(response.status).json({
-        error: `NVIDIA API responded with status ${response.status}`,
+        error: errorMsg,
         details: errorText,
       });
       return;

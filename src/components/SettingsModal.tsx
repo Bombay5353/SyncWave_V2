@@ -25,7 +25,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const handleTestKey = async () => {
     setIsTesting(true);
     setTestResult(null);
-    const result = await testNvidiaConnection(settings.apiKey, settings.baseUrl);
+    const result = await testNvidiaConnection({
+      apiKey: settings.apiKey,
+      baseUrl: settings.baseUrl,
+      model: settings.defaultModel,
+    });
     setTestResult(result);
     setIsTesting(false);
   };
@@ -90,16 +94,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 type="button"
                 onClick={handleTestKey}
                 disabled={isTesting || !settings.apiKey}
-                className={`px-3 py-2 rounded-lg font-semibold flex items-center gap-1.5 transition-colors ${
+                className={`px-3 py-2 rounded-lg font-semibold flex items-center gap-1.5 transition-colors whitespace-nowrap ${
                   settings.apiKey && !isTesting
-                    ? 'bg-slate-800 hover:bg-slate-700 text-white'
-                    : 'bg-slate-900 text-slate-600 cursor-not-allowed'
+                    ? 'bg-slate-800 hover:bg-slate-700 text-white border border-slate-700'
+                    : 'bg-slate-900 text-slate-600 cursor-not-allowed border border-slate-800'
                 }`}
+                title="Tests Base URL, API Key, and Model ID against NVIDIA NIM"
               >
                 {isTesting && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
-                <span>Test Key</span>
+                <span>{isTesting ? 'Testing...' : 'Test Key & Model'}</span>
               </button>
             </div>
+            <p className="text-[11px] text-slate-500 mt-1">
+              Validates Base URL, API Key, and Model ID together against NVIDIA NIM.
+            </p>
 
             {testResult && (
               <div
@@ -114,25 +122,30 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 ) : (
                   <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
                 )}
-                <span>{testResult.message}</span>
+                <span className="leading-relaxed">{testResult.message}</span>
               </div>
             )}
           </div>
 
           {/* Default Model User Text Input */}
           <div>
-            <label className="font-semibold text-slate-300 block mb-1">
-              Default NVIDIA NIM Model ID
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="font-semibold text-slate-300">
+                Default NVIDIA NIM Model ID
+              </label>
+              <span className="text-[11px] text-slate-500">
+                Optional (fallback: <code className="text-[#76b900] font-mono">meta/llama-3.3-70b-instruct</code>)
+              </span>
+            </div>
             <input
               type="text"
               value={settings.defaultModel}
               onChange={(e) => updateSettings({ defaultModel: e.target.value })}
-              placeholder="e.g. meta/llama-3.3-70b-instruct or deepseek-ai/deepseek-r1"
+              placeholder="e.g. meta/llama-3.3-70b-instruct, deepseek-ai/deepseek-r1, or custom model"
               className="w-full bg-slate-900 text-white font-mono rounded-lg px-3 py-2 border border-slate-800 focus:outline-none focus:border-[#76b900] text-xs"
             />
             <p className="text-[11px] text-slate-500 mt-1">
-              Type any model ID supported by your endpoint (e.g. <span className="text-[#76b900]">deepseek-ai/deepseek-r1</span>, <span className="text-[#76b900]">meta/llama-3.3-70b-instruct</span>, <span className="text-[#76b900]">qwen/qwen2.5-coder-32b-instruct</span>).
+              Type any model ID supported by your endpoint. If left blank, it defaults to <span className="text-[#76b900] font-mono">meta/llama-3.3-70b-instruct</span>.
             </p>
           </div>
 

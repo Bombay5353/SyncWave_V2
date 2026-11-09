@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Conversation, ChatMessage, AppSettings, CodexSnippet } from '../types';
-import { streamChatCompletion, CURATED_MODELS } from '../services/nvidiaApi';
+import { streamChatCompletion, getTemporalSystemPrompt, CURATED_MODELS } from '../services/nvidiaApi';
 import {
   Send,
   Plus,
@@ -134,8 +134,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
     setIsStreaming(true);
     setStreamingContent('');
 
+    const dynamicSystemPrompt = getTemporalSystemPrompt(settings.systemPrompt);
+
     const contextMessages = [
-      { role: 'system', content: settings.systemPrompt },
+      { role: 'system', content: dynamicSystemPrompt },
       ...updatedMessages.map((m) => ({ role: m.role, content: m.content })),
     ];
 

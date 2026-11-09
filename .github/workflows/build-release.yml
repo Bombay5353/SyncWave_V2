@@ -108,14 +108,31 @@ jobs:
 
       - name: Setup Capacitor & Android Project
         run: |
-          npx cap add android || true
+          # If gradlew is missing or android directory is incomplete, re-add clean Android platform
+          if [ ! -f "android/gradlew" ]; then
+            echo "gradlew not found in android directory. Cleaning and re-adding Android platform..."
+            rm -rf android
+            npx cap add android
+          fi
           npx cap sync android
+          # Ensure cleartext network permissions are present in AndroidManifest
+          sed -i 's/<application/<application android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml 2>/dev/null || true
 
       - name: Build Debug APK via Gradle
         run: |
           cd android
-          chmod +x ./gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+            ./gradlew assembleDebug --no-daemon --stacktrace
+          elif command -v gradle &> /dev/null; then
+            echo "gradlew missing, assembling debug APK with system Gradle..."
+            gradle assembleDebug --no-daemon --stacktrace
+          else
+            echo "Generating Gradle wrapper..."
+            gradle wrapper
+            chmod +x ./gradlew
+            ./gradlew assembleDebug --no-daemon --stacktrace
+          fi
 
       - name: Upload Android APK Artifact
         uses: actions/upload-artifact@v4
