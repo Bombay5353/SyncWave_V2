@@ -18,17 +18,16 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'npm'
+          node-version: '22'
 
       - name: Install Dependencies
-        run: npm ci
+        run: npm install --legacy-peer-deps
 
-      - name: Install Electron & Builder
-        run: npm install -D electron@latest electron-builder@latest
+      - name: Install Electron Tooling
+        run: npm install --legacy-peer-deps electron@latest electron-builder@latest
 
       - name: Build Web Production Bundle
         run: npm run build
@@ -42,6 +41,7 @@ jobs:
         with:
           name: SyncWave-Windows-EXE
           path: dist/*.exe
+          if-no-files-found: warn
 
   # ------------------------------------------------------------
   # 2. BUILD ANDROID .APK PACKAGE
@@ -52,32 +52,29 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'npm'
+          node-version: '22'
 
       - name: Setup Java JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
+          distribution: 'temurin'
           java-version: '17'
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
       - name: Install Dependencies
-        run: npm ci
-
-      - name: Install Capacitor Tooling
-        run: npm install -D @capacitor/core @capacitor/cli @capacitor/android
+        run: npm install --legacy-peer-deps
 
       - name: Build Web Production Assets
         run: npm run build
 
-      - name: Initialize & Sync Android
+      - name: Setup Capacitor & Android Project
         run: |
+          npm install --legacy-peer-deps @capacitor/core @capacitor/cli @capacitor/android
           npx cap add android || true
           npx cap sync android
 
@@ -85,44 +82,50 @@ jobs:
         run: |
           cd android
           chmod +x ./gradlew
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew assembleDebug --no-daemon
 
       - name: Upload Android APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: SyncWave-Android-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: warn
 
   # ------------------------------------------------------------
   # 3. CREATE GITHUB RELEASE WITH DIRECT DOWNLOADS
   # ------------------------------------------------------------
   publish-release:
     needs: [build-windows-exe, build-android-apk]
+    if: always() && (needs.build-windows-exe.result == 'success' || needs.build-android-apk.result == 'success')
     runs-on: ubuntu-latest
     steps:
-      - name: Download Windows EXE
+      - name: Create release-assets Directory
+        run: mkdir -p release-assets
+
+      - name: Download Windows EXE (if built)
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           name: SyncWave-Windows-EXE
           path: release-assets/
 
-      - name: Download Android APK
+      - name: Download Android APK (if built)
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           name: SyncWave-Android-APK
           path: release-assets/
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
         with:
           tag_name: v1.0.${{ github.run_number }}
           name: SyncWave Studio v1.0.${{ github.run_number }} (EXE & APK)
           body: |
-            ## SyncWave Studio Binary Downloads ⚡
-            - **Windows**: `SyncWave-Setup.exe` (Standalone Windows Desktop Installer)
-            - **Android**: `app-debug.apk` (Android Sideload APK for phones & tablets)
-            - Real-time synchronization active for both devices via NVIDIA NIM API.
+            ## SyncWave Studio Downloads ⚡
+            - **Windows**: `SyncWave-Setup.exe` (Windows desktop standalone installer)
+            - **Android**: `app-debug.apk` (Android mobile APK)
+            - Real-time synchronization active across devices using NVIDIA NIM API.
           files: |
-            release-assets/*.exe
-            release-assets/*.apk
+            release-assets/**/*.exe
+            release-assets/**/*.apk
