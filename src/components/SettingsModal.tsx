@@ -134,18 +134,36 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 Default NVIDIA NIM Model ID
               </label>
               <span className="text-[11px] text-slate-500">
-                Optional (fallback: <code className="text-[#76b900] font-mono">meta/llama-3.3-70b-instruct</code>)
+                Optional (fallback: <code className="text-[#76b900] font-mono">nvidia/llama-3.1-nemotron-70b-instruct</code>)
               </span>
             </div>
             <input
               type="text"
               value={settings.defaultModel}
               onChange={(e) => updateSettings({ defaultModel: e.target.value })}
-              placeholder="e.g. meta/llama-3.3-70b-instruct, deepseek-ai/deepseek-r1, or custom model"
+              placeholder="e.g. nvidia/llama-3.1-nemotron-70b-instruct, mistralai/mistral-large-2-instruct"
               className="w-full bg-slate-900 text-white font-mono rounded-lg px-3 py-2 border border-slate-800 focus:outline-none focus:border-[#76b900] text-xs"
             />
-            <p className="text-[11px] text-slate-500 mt-1">
-              Type any model ID supported by your endpoint. If left blank, it defaults to <span className="text-[#76b900] font-mono">meta/llama-3.3-70b-instruct</span>.
+            {/* Quick-select Active Verified Models */}
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {CURATED_MODELS.slice(0, 4).map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => updateSettings({ defaultModel: m.id })}
+                  className={`text-[10px] font-mono px-2 py-1 rounded border transition-colors ${
+                    settings.defaultModel === m.id
+                      ? 'bg-[#76b900]/20 text-[#76b900] border-[#76b900]/40'
+                      : 'bg-slate-900/80 text-slate-400 hover:text-white border-slate-800 hover:border-slate-700'
+                  }`}
+                  title={m.description}
+                >
+                  {m.name}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-slate-500 mt-1.5">
+              Type any model ID supported by your endpoint or tap a verified active model above.
             </p>
           </div>
 

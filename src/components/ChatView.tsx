@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Conversation, ChatMessage, AppSettings, CodexSnippet } from '../types';
-import { streamChatCompletion, getTemporalSystemPrompt, CURATED_MODELS } from '../services/nvidiaApi';
+import { streamChatCompletion, getTemporalSystemPrompt, CURATED_MODELS, DEFAULT_ACTIVE_MODEL } from '../services/nvidiaApi';
 import {
   Send,
   Plus,
@@ -15,6 +15,7 @@ import {
   PanelLeft,
   Search,
   Cpu,
+  ChevronDown,
   X,
 } from 'lucide-react';
 
@@ -41,6 +42,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false); // Closed by default on mobile, can open on desktop
   const [searchQuery, setSearchQuery] = useState('');
+  const [showModelPicker, setShowModelPicker] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Set default sidebar open on desktop viewports
@@ -52,6 +54,15 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
   const activeConv =
     conversations.find((c) => c.id === activeConversationId) || conversations[0];
+
+  // Auto-migrate retired EOL model on active conversation
+  useEffect(() => {
+    if (activeConv && activeConv.model === 'meta/llama-3.3-70b-instruct') {
+      updateConversations((prev) =>
+        prev.map((c) => (c.id === activeConv.id ? { ...c, model: DEFAULT_ACTIVE_MODEL } : c))
+      );
+    }
+  }, [activeConv?.id, activeConv?.model]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -377,8 +388,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
               <PanelLeft className="w-4 h-4" />
             </button>
 
-            {/* Model User Text Input */}
-            <div className="flex items-center gap-1.5 min-w-0">
+            {/* Model User Text Input with Quick Selection Popover */}
+            <div className="relative flex items-center gap-1.5 min-w-0">
               <Cpu className="w-3.5 h-3.5 text-[#76b900] shrink-0" />
               <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 focus-within:border-[#76b900] transition-colors">
                 <span className="text-[10px] text-slate-500 font-mono mr-1 hidden sm:inline">model:</span>
@@ -391,11 +402,57 @@ export const ChatView: React.FC<ChatViewProps> = ({
                       prev.map((c) => (c.id === activeConv?.id ? { ...c, model: newModel } : c))
                     );
                   }}
-                  placeholder="e.g. meta/llama-3.3-70b-instruct"
-                  className="bg-transparent text-xs font-mono text-slate-200 focus:outline-none w-32 sm:w-60 truncate"
+                  placeholder="e.g. nvidia/llama-3.1-nemotron-70b-instruct"
+                  className="bg-transparent text-xs font-mono text-slate-200 focus:outline-none w-32 sm:w-56 truncate"
                   title="Enter any NVIDIA NIM model ID"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowModelPicker(!showModelPicker)}
+                  className="p-0.5 text-slate-400 hover:text-white rounded ml-1"
+                  title="Choose active verified NVIDIA model"
+                >
+                  <ChevronDown className="w-3.5 h-3.5" />
+                </button>
               </div>
+
+              {/* Quick Model Dropdown Menu */}
+              {showModelPicker && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setShowModelPicker(false)}
+                  />
+                  <div className="absolute top-full left-0 mt-1.5 w-72 rounded-xl bg-[#090d16] border border-slate-800 shadow-2xl z-50 p-1.5 space-y-1">
+                    <div className="px-2 py-1 text-[10px] uppercase font-semibold text-slate-400 tracking-wider">
+                      Verified Active NIM Models
+                    </div>
+                    {CURATED_MODELS.map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => {
+                          updateConversations((prev) =>
+                            prev.map((c) => (c.id === activeConv?.id ? { ...c, model: m.id } : c))
+                          );
+                          setShowModelPicker(false);
+                        }}
+                        className={`w-full text-left p-2 rounded-lg text-xs transition-colors flex flex-col ${
+                          activeConv?.model === m.id
+                            ? 'bg-[#76b900]/15 text-[#76b900] border border-[#76b900]/30'
+                            : 'hover:bg-slate-800/60 text-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between font-medium">
+                          <span>{m.name}</span>
+                          <span className="text-[10px] font-mono text-slate-500">{m.context}</span>
+                        </div>
+                        <span className="text-[10px] text-slate-500 font-mono truncate">{m.id}</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           </div>
 

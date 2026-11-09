@@ -50,14 +50,18 @@ export function useSyncEngine() {
       const saved = localStorage.getItem(STORAGE_KEY_SETTINGS);
       if (saved) {
         try {
-          return JSON.parse(saved);
+          const parsed = JSON.parse(saved);
+          if (parsed.defaultModel === 'meta/llama-3.3-70b-instruct') {
+            parsed.defaultModel = 'nvidia/llama-3.1-nemotron-70b-instruct';
+          }
+          return parsed;
         } catch (e) {}
       }
     }
     return {
       baseUrl: 'https://integrate.api.nvidia.com/v1',
       apiKey: '',
-      defaultModel: 'meta/llama-3.3-70b-instruct',
+      defaultModel: 'nvidia/llama-3.1-nemotron-70b-instruct',
       temperature: 0.6,
       topP: 0.9,
       maxTokens: 2048,
@@ -73,7 +77,13 @@ export function useSyncEngine() {
       const saved = localStorage.getItem(STORAGE_KEY_CONVS);
       if (saved) {
         try {
-          return JSON.parse(saved);
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) {
+            return parsed.map((c: Conversation) => ({
+              ...c,
+              model: c.model === 'meta/llama-3.3-70b-instruct' ? 'nvidia/llama-3.1-nemotron-70b-instruct' : c.model,
+            }));
+          }
         } catch (e) {}
       }
     }
@@ -81,14 +91,14 @@ export function useSyncEngine() {
       {
         id: 'c-welcome',
         title: 'Getting Started with NVIDIA NIM',
-        model: 'meta/llama-3.3-70b-instruct',
+        model: 'nvidia/llama-3.1-nemotron-70b-instruct',
         createdAt: Date.now(),
         updatedAt: Date.now(),
         messages: [
           {
             id: 'm-1',
             role: 'assistant',
-            content: `### Welcome to SyncWave Studio! ⚡\n\nYour app is equipped with **NVIDIA NIM API** integration (\`https://integrate.api.nvidia.com/v1\`) and **Real-Time Cross-Device Synchronization**.\n\n#### What can you do right now?\n1. **Live Synchronization**: Notice your Room ID (\`${roomId}\`). Open this URL on your **Android phone** or **Windows desktop** and your messages and code will mirror in real time!\n2. **Codex Studio**: Open the **Codex** tab to write code with live HTML/JS preview and execution sandbox.\n3. **Install as App**: Use the **Install App** button to install as a standalone PWA on Windows or Android without an app store.\n4. **NVIDIA API Key**: Click **API Settings** in the header to enter your API key (\`nvapi-...\`) for live frontier models like DeepSeek R1 and Llama 3.3.`,
+            content: `### Welcome to SyncWave Studio! ⚡\n\nYour app is equipped with **NVIDIA NIM API** integration (\`https://integrate.api.nvidia.com/v1\`) and **Real-Time Cross-Device Synchronization**.\n\n#### What can you do right now?\n1. **Live Synchronization**: Notice your Room ID (\`${roomId}\`). Open this URL on your **Android phone** or **Windows desktop** and your messages and code will mirror in real time!\n2. **Codex Studio**: Open the **Codex** tab to write code with live HTML/JS preview and execution sandbox.\n3. **Install as App**: Use the **Install App** button to install as a standalone PWA on Windows or Android without an app store.\n4. **NVIDIA API Key**: Click **API Settings** in the header to enter your API key (\`nvapi-...\`) for live frontier models like Nemotron 70B and Mistral Large 2.`,
             timestamp: Date.now(),
           },
         ],

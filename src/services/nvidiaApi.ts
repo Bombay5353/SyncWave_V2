@@ -1,49 +1,50 @@
 import { NvidiaModel } from '../types';
 
 export const DEFAULT_NVIDIA_BASE_URL = 'https://integrate.api.nvidia.com/v1';
+export const DEFAULT_ACTIVE_MODEL = 'nvidia/llama-3.1-nemotron-70b-instruct';
 
 export const CURATED_MODELS: NvidiaModel[] = [
   {
-    id: 'meta/llama-3.3-70b-instruct',
-    name: 'Llama 3.3 70B Instruct',
-    tag: 'Flagship General',
-    context: '128K',
-    description: 'NVIDIA NIM high-speed inference for general reasoning and assistant workflows.',
-  },
-  {
-    id: 'deepseek-ai/deepseek-r1',
-    name: 'DeepSeek R1',
-    tag: 'Deep Reasoning',
-    context: '64K',
-    description: 'State-of-the-art open reasoning model with transparent chain-of-thought.',
-  },
-  {
-    id: 'qwen/qwen2.5-coder-32b-instruct',
-    name: 'Qwen 2.5 Coder 32B',
-    tag: 'Codex Specialist',
-    context: '32K',
-    description: 'Optimized for code generation, multi-file refactoring, and algorithmic reasoning.',
-  },
-  {
     id: 'nvidia/llama-3.1-nemotron-70b-instruct',
     name: 'Nemotron 70B Instruct',
-    tag: 'NVIDIA Custom',
+    tag: 'Flagship NVIDIA',
     context: '128K',
-    description: 'NVIDIA-aligned model with outstanding helpfulness and benchmark scores.',
-  },
-  {
-    id: 'meta/llama-3.1-405b-instruct',
-    name: 'Llama 3.1 405B Instruct',
-    tag: 'Frontier Scale',
-    context: '128K',
-    description: 'Frontier-grade intelligence for complex architectural synthesis.',
+    description: 'NVIDIA-aligned model with state-of-the-art reasoning, code, and helpfulness.',
   },
   {
     id: 'mistralai/mistral-large-2-instruct',
     name: 'Mistral Large 2',
     tag: 'Multilingual & Code',
     context: '128K',
-    description: 'High-speed reasoning, advanced code capabilities and multilingual nuance.',
+    description: 'Flagship reasoning with multi-language fluency and advanced algorithmic coding.',
+  },
+  {
+    id: 'deepseek-ai/deepseek-v4.1-flash',
+    name: 'DeepSeek V4.1 Flash',
+    tag: 'Deep Reasoning',
+    context: '128K',
+    description: 'Ultra-fast open architecture model optimized for low-latency reasoning.',
+  },
+  {
+    id: 'mistralai/codestral-22b-instruct-v0.1',
+    name: 'Codestral 22B',
+    tag: 'Codex Specialist',
+    context: '32K',
+    description: 'Tailored for software engineering, multi-file refactoring, and code review.',
+  },
+  {
+    id: 'meta/llama-3.2-90b-vision-instruct',
+    name: 'Llama 3.2 90B Vision',
+    tag: 'Vision & Language',
+    context: '128K',
+    description: 'Flagship multimodal Meta model with deep analytical comprehension.',
+  },
+  {
+    id: 'nvidia/nemotron-4-340b-instruct',
+    name: 'Nemotron 4 340B',
+    tag: 'Frontier Scale',
+    context: '128K',
+    description: 'Enterprise-grade massive foundation model for complex architectural synthesis.',
   },
 ];
 
@@ -88,7 +89,7 @@ export function getTemporalSystemPrompt(userSystemPrompt?: string): string {
 
 /**
  * Validates Base URL, API Key, and (optionally) Model ID against NVIDIA NIM.
- * Model is optional: if omitted or left blank, falls back to meta/llama-3.3-70b-instruct.
+ * Model is optional: if omitted or left blank, falls back to nvidia/llama-3.1-nemotron-70b-instruct.
  */
 export const CLOUD_RELAY_CHAT_URL =
   'https://ais-pre-n3laelskoh6pbbuixx6l37-683064120718.asia-northeast1.run.app/api/chat';
@@ -109,7 +110,7 @@ async function executeApiRequest(targetUrl: string, options: RequestInit): Promi
 
 /**
  * Validates Base URL, API Key, and (optionally) Model ID against NVIDIA NIM.
- * Model is optional: if omitted or left blank, falls back to meta/llama-3.3-70b-instruct.
+ * Model is optional: if omitted or left blank, falls back to active flagship model.
  */
 export async function testNvidiaConnection(
   apiKeyOrParams: string | TestConnectionParams,
@@ -139,10 +140,11 @@ export async function testNvidiaConnection(
     return { success: false, message: 'Base URL must start with http:// or https://' };
   }
 
-  // Model is optional: use specified model or default to stable meta/llama-3.3-70b-instruct
-  const effectiveModel = model && model.trim().length > 0
-    ? model.trim()
-    : 'meta/llama-3.3-70b-instruct';
+  // Model is optional: sanitize EOL models (meta/llama-3.3-70b-instruct reached EOL on NVIDIA)
+  let effectiveModel = model && model.trim().length > 0 ? model.trim() : DEFAULT_ACTIVE_MODEL;
+  if (effectiveModel === 'meta/llama-3.3-70b-instruct') {
+    effectiveModel = DEFAULT_ACTIVE_MODEL;
+  }
 
   try {
     const isStandalone = typeof window !== 'undefined' && (
@@ -177,33 +179,32 @@ export async function testNvidiaConnection(
       let parsedError = `HTTP error ${res.status}`;
       try {
         const errorData = await res.json();
-        if (errorData?.error?.message) {
-          parsedError = errorData.error.message;
-        } else if (errorData?.error) {
-          parsedError = typeof errorData.error === 'string' ? errorData.error : JSON.stringify(errorData.error);
-        } else if (errorData?.message) {
-          parsedError = errorData.message;
-        } else if (errorData?.details) {
-          parsedError = errorData.details;
-        }
+        parsedError =
+          errorData?.detail ||
+          errorData?.error?.message ||
+          (typeof errorData?.error === 'string' ? errorData.error : null) ||
+          errorData?.message ||
+          errorData?.title ||
+          errorData?.details ||
+          `HTTP error ${res.status}`;
       } catch (e) {
         const text = await res.text().catch(() => '');
         if (text) parsedError = text.slice(0, 150);
       }
 
-      if (res.status === 401) {
-        return { success: false, message: `Invalid or unauthorized API key (${parsedError})` };
+      if (res.status === 401 || res.status === 403) {
+        return { success: false, message: `Authentication failed (${parsedError}). Please verify your NVIDIA API Key starts with 'nvapi-'.` };
       }
       if (res.status === 404) {
         return {
           success: false,
-          message: `Model '${effectiveModel}' not found on this endpoint or invalid URL (${parsedError})`,
+          message: `Model '${effectiveModel}' not found on this endpoint (${parsedError}).`,
         };
       }
       if (res.status === 410) {
         return {
           success: false,
-          message: `Endpoint or model '${effectiveModel}' is no longer active (HTTP 410 Gone: ${parsedError}). Check model ID or use default.`,
+          message: `Model '${effectiveModel}' has reached end-of-life on NVIDIA NIM (${parsedError}). Switch to '${DEFAULT_ACTIVE_MODEL}'.`,
         };
       }
       return { success: false, message: `API test failed: ${parsedError}` };
@@ -249,6 +250,12 @@ export async function streamChatCompletion({
   }
 
   try {
+    // Automatically sanitize retired EOL models (meta/llama-3.3-70b-instruct reached EOL on NVIDIA)
+    let effectiveModel = model && model.trim().length > 0 ? model.trim() : DEFAULT_ACTIVE_MODEL;
+    if (effectiveModel === 'meta/llama-3.3-70b-instruct') {
+      effectiveModel = DEFAULT_ACTIVE_MODEL;
+    }
+
     const isStandalone = typeof window !== 'undefined' && (
       window.location.protocol === 'file:' ||
       window.location.protocol === 'app:' ||
@@ -271,7 +278,7 @@ export async function streamChatCompletion({
         'x-nvidia-base-url': cleanBaseUrl,
       },
       body: JSON.stringify({
-        model,
+        model: effectiveModel,
         messages,
         temperature,
         top_p: topP,
@@ -287,14 +294,20 @@ export async function streamChatCompletion({
       try {
         const errorJson = await res.json();
         errorMsg =
+          errorJson.detail ||
           errorJson.error?.message ||
           errorJson.message ||
           (typeof errorJson.error === 'string' ? errorJson.error : null) ||
+          errorJson.title ||
           errorJson.details ||
           `API error ${res.status}`;
       } catch (e) {
         const text = await res.text().catch(() => '');
         if (text) errorMsg = text.slice(0, 150);
+      }
+
+      if (res.status === 410) {
+        errorMsg = `Model '${effectiveModel}' reached end-of-life on NVIDIA NIM (${errorMsg}). Switched to '${DEFAULT_ACTIVE_MODEL}'.`;
       }
       onError(errorMsg);
       return;
