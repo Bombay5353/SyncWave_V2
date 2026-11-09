@@ -115,8 +115,26 @@ jobs:
             npx cap add android
           fi
           npx cap sync android
-          # Ensure cleartext network permissions are present in AndroidManifest
+          # Ensure cleartext network permissions and camera permissions are present in AndroidManifest
           sed -i 's/<application/<application android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml 2>/dev/null || true
+          grep -q "android.permission.CAMERA" android/app/src/main/AndroidManifest.xml || sed -i 's/<\/manifest>/    <uses-permission android:name="android.permission.CAMERA" \/>\n<\/manifest>/' android/app/src/main/AndroidManifest.xml 2>/dev/null || true
+
+          # Ensure MainActivity has WindowCompat.setDecorFitsSystemWindows so status bar icons never overlap UI
+          cat << 'EOF' > android/app/src/main/java/com/syncwave/ai/MainActivity.java
+package com.syncwave.ai;
+
+import android.os.Bundle;
+import androidx.core.view.WindowCompat;
+import com.getcapacitor.BridgeActivity;
+
+public class MainActivity extends BridgeActivity {
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), true);
+    }
+}
+EOF
 
       - name: Build Debug APK via Gradle
         run: |

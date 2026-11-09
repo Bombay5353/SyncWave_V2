@@ -90,6 +90,27 @@ export function getTemporalSystemPrompt(userSystemPrompt?: string): string {
  * Validates Base URL, API Key, and (optionally) Model ID against NVIDIA NIM.
  * Model is optional: if omitted or left blank, falls back to meta/llama-3.3-70b-instruct.
  */
+export const CLOUD_RELAY_CHAT_URL =
+  'https://ais-pre-n3laelskoh6pbbuixx6l37-683064120718.asia-northeast1.run.app/api/chat';
+
+async function executeApiRequest(targetUrl: string, options: RequestInit): Promise<Response> {
+  try {
+    return await fetch(targetUrl, options);
+  } catch (err: any) {
+    // If direct fetch was blocked (e.g. Android WebView CORS on https://localhost),
+    // automatically fallback to the CORS-enabled Cloud Relay server!
+    if (targetUrl !== '/api/chat' && targetUrl !== CLOUD_RELAY_CHAT_URL) {
+      console.warn('Direct API fetch failed, retrying via Cloud Relay:', err);
+      return await fetch(CLOUD_RELAY_CHAT_URL, options);
+    }
+    throw err;
+  }
+}
+
+/**
+ * Validates Base URL, API Key, and (optionally) Model ID against NVIDIA NIM.
+ * Model is optional: if omitted or left blank, falls back to meta/llama-3.3-70b-instruct.
+ */
 export async function testNvidiaConnection(
   apiKeyOrParams: string | TestConnectionParams,
   baseUrlArg: string = DEFAULT_NVIDIA_BASE_URL,
@@ -136,7 +157,7 @@ export async function testNvidiaConnection(
       ? `${cleanBaseUrl}/chat/completions`
       : '/api/chat';
 
-    const res = await fetch(targetUrl, {
+    const res = await executeApiRequest(targetUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -236,17 +257,18 @@ export async function streamChatCompletion({
       (window as any).Capacitor !== undefined ||
       !window.location.origin.startsWith('http')
     );
+    const cleanBaseUrl = baseUrl.trim().replace(/\/+$/, '');
     const targetUrl = isStandalone
-      ? `${baseUrl.replace(/\/+$/, '')}/chat/completions`
+      ? `${cleanBaseUrl}/chat/completions`
       : '/api/chat';
 
-    const res = await fetch(targetUrl, {
+    const fetchOptions: RequestInit = {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey.trim()}`,
         'x-nvidia-api-key': apiKey.trim(),
-        'x-nvidia-base-url': baseUrl.trim(),
+        'x-nvidia-base-url': cleanBaseUrl,
       },
       body: JSON.stringify({
         model,
@@ -256,7 +278,9 @@ export async function streamChatCompletion({
         max_tokens: maxTokens,
         stream: true,
       }),
-    });
+    };
+
+    const res = await executeApiRequest(targetUrl, fetchOptions);
 
     if (!res.ok) {
       let errorMsg = `API error ${res.status}`;
@@ -276,40 +300,66 @@ export async function streamChatCompletion({
       return;
     }
 
-    if (!res.body) {
-      onError('Response body is empty');
-      return;
-    }
-
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
     let accumulated = '';
-    let buffer = '';
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    // If streaming body reader is available (standard browser and Electron)
+    if (res.body && typeof res.body.getReader === 'function') {
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
 
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed === 'data: [DONE]') continue;
-        if (trimmed.startsWith('data: ')) {
-          try {
-            const parsed = JSON.parse(trimmed.slice(6));
-            const delta = parsed.choices?.[0]?.delta?.content || '';
-            if (delta) {
-              accumulated += delta;
-              onChunk(accumulated);
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed === 'data: [DONE]') continue;
+          if (trimmed.startsWith('data: ')) {
+            try {
+              const parsed = JSON.parse(trimmed.slice(6));
+              const delta = parsed.choices?.[0]?.delta?.content || '';
+              if (delta) {
+                accumulated += delta;
+                onChunk(accumulated);
+              }
+            } catch (e) {
+              // Ignore partial SSE chunks
             }
-          } catch (e) {
-            // Ignore partial SSE chunks
           }
         }
       }
+    } else {
+      // Buffered body fallback (e.g. mobile native HTTP layer)
+      const fullText = await res.text();
+      if (fullText.includes('data: ')) {
+        const lines = fullText.split('\n');
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed === 'data: [DONE]') continue;
+          if (trimmed.startsWith('data: ')) {
+            try {
+              const parsed = JSON.parse(trimmed.slice(6));
+              const delta = parsed.choices?.[0]?.delta?.content || '';
+              if (delta) {
+                accumulated += delta;
+              }
+            } catch (e) {}
+          }
+        }
+      } else {
+        try {
+          const parsed = JSON.parse(fullText);
+          accumulated = parsed.choices?.[0]?.message?.content || parsed.choices?.[0]?.delta?.content || fullText;
+        } catch (e) {
+          accumulated = fullText;
+        }
+      }
+      onChunk(accumulated);
     }
 
     onFinish(accumulated);

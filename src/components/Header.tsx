@@ -31,7 +31,7 @@ export const Header: React.FC<HeaderProps> = ({
   const { isInstallable } = usePWAInstall();
 
   return (
-    <header className="flex items-center justify-between gap-3 sm:gap-6 px-3 sm:px-5 py-2.5 sm:py-3 border-b border-slate-800/80 bg-[#090d16]/95 backdrop-blur-md sticky top-0 z-40 select-none w-full max-w-full overflow-hidden">
+    <header className="flex items-center justify-between gap-3 sm:gap-6 px-3 sm:px-5 pt-[max(env(safe-area-inset-top,0px),0.75rem)] pb-2.5 sm:pb-3 border-b border-slate-800/80 bg-[#090d16]/95 backdrop-blur-md sticky top-0 z-40 select-none w-full max-w-full overflow-hidden">
       {/* Zone 1: Brand Wordmark (Single line, text element) */}
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
         <a
