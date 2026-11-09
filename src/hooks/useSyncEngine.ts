@@ -198,13 +198,34 @@ if __name__ == "__main__":
   // Ref to avoid cyclic broadcasts
   const isIncomingSync = useRef(false);
 
+  // Helper to determine sync server URL (routes to Cloud Run relay if in standalone APK or Electron)
+  const getSyncApiUrl = useCallback(
+    (subpath: string): string => {
+      if (typeof window === 'undefined') return `/api/sync/${roomId}${subpath}`;
+      const isStandalone =
+        window.location.protocol === 'file:' ||
+        window.location.protocol === 'app:' ||
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1' ||
+        (window as any).Capacitor !== undefined ||
+        !window.location.origin.startsWith('http');
+
+      if (isStandalone) {
+        return `https://ais-pre-n3laelskoh6pbbuixx6l37-683064120718.asia-northeast1.run.app/api/sync/${roomId}${subpath}`;
+      }
+      return `/api/sync/${roomId}${subpath}`;
+    },
+    [roomId]
+  );
+
   // Sync to server
   const broadcastSync = useCallback(
     async (newConversations: Conversation[], newSnippets: CodexSnippet[], model: string) => {
       if (isIncomingSync.current) return;
       try {
         setSyncStatus('syncing');
-        await fetch(`/api/sync/${roomId}`, {
+        const targetUrl = getSyncApiUrl('');
+        await fetch(targetUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -221,7 +242,7 @@ if __name__ == "__main__":
         setSyncStatus('offline');
       }
     },
-    [roomId, devicePlatform]
+    [getSyncApiUrl, devicePlatform]
   );
 
   // Persistent storage effects
@@ -243,7 +264,8 @@ if __name__ == "__main__":
     let isSubscribed = true;
 
     try {
-      eventSource = new EventSource(`/api/sync/${roomId}/stream`);
+      const streamUrl = getSyncApiUrl('/stream');
+      eventSource = new EventSource(streamUrl);
 
       eventSource.onopen = () => {
         if (isSubscribed) setSyncStatus('connected');

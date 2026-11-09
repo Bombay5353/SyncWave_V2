@@ -35,11 +35,28 @@ export default function App() {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
 
-  // Register service worker for PWA
+  // Register service worker for PWA only in browser environments (never in Electron or Capacitor WebView)
   useEffect(() => {
-    if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
+
+    const isStandalone =
+      window.location.protocol === 'file:' ||
+      window.location.protocol === 'app:' ||
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1' ||
+      (window as any).Capacitor !== undefined ||
+      !window.location.origin.startsWith('http');
+
+    if (isStandalone) {
+      // Unregister any previous service workers that could intercept local bundle assets
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        for (const registration of registrations) {
+          registration.unregister();
+        }
+      });
+    } else if (process.env.NODE_ENV === 'production') {
       navigator.serviceWorker
-        .register('/sw.js')
+        .register('./sw.js')
         .then((reg) => console.log('SyncWave Service Worker registered:', reg.scope))
         .catch((err) => console.log('Service Worker registration skipped:', err));
     }

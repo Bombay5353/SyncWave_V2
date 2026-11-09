@@ -1,0 +1,14 @@
+{
+	"appId": "com.syncwave.ai",
+	"appName": "SyncWave Studio",
+	"webDir": "dist",
+	"server": {
+		"androidScheme": "https",
+		"cleartext": true
+	},
+	"android": {
+		"allowMixedContent": true,
+		"captureInput": true,
+		"webContentsDebuggingEnabled": true
+	}
+}

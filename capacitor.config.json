@@ -2,9 +2,8 @@
   "appId": "com.syncwave.ai",
   "appName": "SyncWave Studio",
   "webDir": "dist",
-  "bundledWebRuntime": false,
   "server": {
-    "url": "https://ais-pre-n3laelskoh6pbbuixx6l37-683064120718.asia-northeast1.run.app",
+    "androidScheme": "https",
     "cleartext": true
   },
   "android": {

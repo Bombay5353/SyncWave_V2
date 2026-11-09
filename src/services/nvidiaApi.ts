@@ -53,10 +53,23 @@ export async function testNvidiaConnection(apiKey: string, baseUrl: string = DEF
   }
 
   try {
-    const res = await fetch('/api/chat', {
+    const isStandalone = typeof window !== 'undefined' && (
+      window.location.protocol === 'file:' ||
+      window.location.protocol === 'app:' ||
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1' ||
+      (window as any).Capacitor !== undefined ||
+      !window.location.origin.startsWith('http')
+    );
+    const targetUrl = isStandalone
+      ? `${baseUrl.replace(/\/+$/, '')}/chat/completions`
+      : '/api/chat';
+
+    const res = await fetch(targetUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey.trim()}`,
         'x-nvidia-api-key': apiKey.trim(),
         'x-nvidia-base-url': baseUrl.trim(),
       },
@@ -109,10 +122,23 @@ export async function streamChatCompletion({
   }
 
   try {
-    const res = await fetch('/api/chat', {
+    const isStandalone = typeof window !== 'undefined' && (
+      window.location.protocol === 'file:' ||
+      window.location.protocol === 'app:' ||
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1' ||
+      (window as any).Capacitor !== undefined ||
+      !window.location.origin.startsWith('http')
+    );
+    const targetUrl = isStandalone
+      ? `${baseUrl.replace(/\/+$/, '')}/chat/completions`
+      : '/api/chat';
+
+    const res = await fetch(targetUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey.trim()}`,
         'x-nvidia-api-key': apiKey.trim(),
         'x-nvidia-base-url': baseUrl.trim(),
       },
