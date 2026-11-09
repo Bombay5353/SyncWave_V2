@@ -49,6 +49,8 @@
   },
   "optionalDependencies": {
     "@rolldown/binding-win32-x64-msvc": "1.2.18",
-    "@rolldown/binding-linux-x64-gnu": "1.2.18"
+    "@rolldown/binding-linux-x64-gnu": "1.2.18",
+    "lightningcss-win32-x64-msvc": "^1.33.0",
+    "lightningcss-linux-x64-gnu": "^1.33.0"
   }
 }

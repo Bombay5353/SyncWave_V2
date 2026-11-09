@@ -10,10 +10,10 @@ permissions:
 
 jobs:
   # ------------------------------------------------------------
-  # 1. BUILD WINDOWS .EXE INSTALLER
+  # 1. BUILD WEB ASSETS (Cross-platform HTML/JS/CSS bundle)
   # ------------------------------------------------------------
-  build-windows-exe:
-    runs-on: windows-latest
+  build-web:
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -26,8 +26,39 @@ jobs:
       - name: Install Dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Build Web Assets
+      - name: Build Web Assets with Vite
         run: npm run build
+
+      - name: Upload Web Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: dist/
+          retention-days: 1
+
+  # ------------------------------------------------------------
+  # 2. BUILD WINDOWS .EXE INSTALLER
+  # ------------------------------------------------------------
+  build-windows-exe:
+    needs: [build-web]
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Download Web Build Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: dist
+
+      - name: Install Dependencies for Electron Builder
+        run: npm install --legacy-peer-deps
 
       - name: Package Windows EXE with Electron Builder
         env:
@@ -42,9 +73,10 @@ jobs:
           if-no-files-found: warn
 
   # ------------------------------------------------------------
-  # 2. BUILD ANDROID .APK PACKAGE (Java 21 for Capacitor 7)
+  # 3. BUILD ANDROID .APK PACKAGE (Java 21 for Capacitor 7)
   # ------------------------------------------------------------
   build-android-apk:
+    needs: [build-web]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -65,12 +97,17 @@ jobs:
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
+      - name: Download Web Build Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: dist
+
       - name: Install Dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Build Web Assets & Sync Android
+      - name: Sync Android Platform
         run: |
-          npm run build
           if [ ! -f "android/gradlew" ]; then
             echo "Regenerating Android platform..."
             rm -rf android
@@ -101,7 +138,7 @@ jobs:
           if-no-files-found: warn
 
   # ------------------------------------------------------------
-  # 3. CREATE GITHUB RELEASE WITH DIRECT DOWNLOADS
+  # 4. CREATE GITHUB RELEASE WITH DIRECT DOWNLOADS
   # ------------------------------------------------------------
   publish-release:
     needs: [build-windows-exe, build-android-apk]
