@@ -1,0 +1,6 @@
+{
+  "name": "SyncWave AI Studio - NVIDIA NIM Chat & Codex",
+  "description": "Cross-platform AI Chat and Codex development studio powered by NVIDIA NIM API. Real-time synchronization between Windows desktop and Android devices.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
