@@ -1,7 +1,10 @@
 {
-  "name": "react-example",
+  "name": "syncwave-studio",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
+  "description": "Cross-platform AI Chat and Codex development studio powered by NVIDIA NIM",
+  "author": "Pratik Mumbaikar",
+  "main": "electron/main.cjs",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",

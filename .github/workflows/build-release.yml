@@ -26,21 +26,20 @@ jobs:
       - name: Install Dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Install Electron Tooling
+      - name: Install Electron & Builder
         run: npm install --legacy-peer-deps electron@latest electron-builder@latest
 
       - name: Build Web Production Bundle
         run: npm run build
 
-      - name: Package Windows EXE
-        run: |
-          npx electron-builder --win --x64 -c.extraMetadata.main=electron/main.cjs -c.appId=com.syncwave.ai -c.productName="SyncWave Studio"
+      - name: Package Windows EXE with Electron Builder
+        run: npx electron-builder --win --config electron-builder.json
 
       - name: Upload Windows EXE Artifact
         uses: actions/upload-artifact@v4
         with:
           name: SyncWave-Windows-EXE
-          path: dist/*.exe
+          path: dist-electron/*.exe
           if-no-files-found: warn
 
   # ------------------------------------------------------------
@@ -72,7 +71,7 @@ jobs:
       - name: Build Web Production Assets
         run: npm run build
 
-      - name: Setup Capacitor & Android Project
+      - name: Setup Capacitor Tooling
         run: |
           npm install --legacy-peer-deps @capacitor/core @capacitor/cli @capacitor/android
           npx cap add android || true
@@ -82,7 +81,7 @@ jobs:
         run: |
           cd android
           chmod +x ./gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Upload Android APK Artifact
         uses: actions/upload-artifact@v4
@@ -99,7 +98,7 @@ jobs:
     if: always() && (needs.build-windows-exe.result == 'success' || needs.build-android-apk.result == 'success')
     runs-on: ubuntu-latest
     steps:
-      - name: Create release-assets Directory
+      - name: Create Release Assets Directory
         run: mkdir -p release-assets
 
       - name: Download Windows EXE (if built)
@@ -122,8 +121,8 @@ jobs:
           tag_name: v1.0.${{ github.run_number }}
           name: SyncWave Studio v1.0.${{ github.run_number }} (EXE & APK)
           body: |
-            ## SyncWave Studio Downloads ⚡
-            - **Windows**: `SyncWave-Setup.exe` (Windows desktop standalone installer)
+            ## SyncWave Studio Binary Downloads ⚡
+            - **Windows**: `SyncWave-Studio-Setup.exe` (Windows desktop standalone installer)
             - **Android**: `app-debug.apk` (Android mobile APK)
             - Real-time synchronization active across devices using NVIDIA NIM API.
           files: |
