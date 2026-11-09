@@ -120,21 +120,14 @@ jobs:
           grep -q "android.permission.CAMERA" android/app/src/main/AndroidManifest.xml || sed -i 's/<\/manifest>/    <uses-permission android:name="android.permission.CAMERA" \/>\n<\/manifest>/' android/app/src/main/AndroidManifest.xml 2>/dev/null || true
 
           # Ensure MainActivity has WindowCompat.setDecorFitsSystemWindows so status bar icons never overlap UI
-          cat << 'EOF' > android/app/src/main/java/com/syncwave/ai/MainActivity.java
-package com.syncwave.ai;
+          mkdir -p android/app/src/main/java/com/syncwave/ai
+          node -e '
+            const fs = require("fs");
+            const file = "android/app/src/main/java/com/syncwave/ai/MainActivity.java";
+            const code = "package com.syncwave.ai;\n\nimport android.os.Bundle;\nimport androidx.core.view.WindowCompat;\nimport com.getcapacitor.BridgeActivity;\n\npublic class MainActivity extends BridgeActivity {\n    @Override\n    public void onCreate(Bundle savedInstanceState) {\n        super.onCreate(savedInstanceState);\n        WindowCompat.setDecorFitsSystemWindows(getWindow(), true);\n    }\n}\n";
+            fs.writeFileSync(file, code);
+          '
 
-import android.os.Bundle;
-import androidx.core.view.WindowCompat;
-import com.getcapacitor.BridgeActivity;
-
-public class MainActivity extends BridgeActivity {
-    @Override
-    public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        WindowCompat.setDecorFitsSystemWindows(getWindow(), true);
-    }
-}
-EOF
 
       - name: Build Debug APK via Gradle
         run: |
