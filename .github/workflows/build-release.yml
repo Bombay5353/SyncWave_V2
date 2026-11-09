@@ -58,9 +58,7 @@ jobs:
           path: dist/
 
       - name: Install Packaging Dependencies
-        run: |
-          npm install --legacy-peer-deps
-          npm install -D --no-save @rolldown/binding-win32-x64-msvc electron@latest electron-builder@latest
+        run: npm install --legacy-peer-deps
 
       - name: Package Windows EXE with Electron Builder
         run: npx electron-builder --win --config electron-builder.json
@@ -103,10 +101,8 @@ jobs:
           name: web-dist
           path: dist/
 
-      - name: Install Tooling & Capacitor
-        run: |
-          npm install --legacy-peer-deps
-          npm install -D @capacitor/core @capacitor/cli @capacitor/android
+      - name: Install Dependencies
+        run: npm install --legacy-peer-deps
 
       - name: Setup Capacitor & Android Project
         run: |
