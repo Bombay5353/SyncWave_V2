@@ -10,10 +10,10 @@ permissions:
 
 jobs:
   # ------------------------------------------------------------
-  # 1. BUILD WEB ASSETS (Fast, Platform-Independent on Linux)
+  # 1. BUILD WINDOWS .EXE INSTALLER
   # ------------------------------------------------------------
-  build-web:
-    runs-on: ubuntu-latest
+  build-windows-exe:
+    runs-on: windows-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -26,39 +26,8 @@ jobs:
       - name: Install Dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Build Web Production Assets
+      - name: Build Web Assets
         run: npm run build
-
-      - name: Upload Web Build Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: web-dist
-          path: dist/
-          retention-days: 1
-
-  # ------------------------------------------------------------
-  # 2. BUILD WINDOWS .EXE INSTALLER (Using Pre-built Web Assets)
-  # ------------------------------------------------------------
-  build-windows-exe:
-    needs: build-web
-    runs-on: windows-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Download Web Dist
-        uses: actions/download-artifact@v4
-        with:
-          name: web-dist
-          path: dist/
-
-      - name: Install Packaging Dependencies
-        run: npm install --legacy-peer-deps
 
       - name: Package Windows EXE with Electron Builder
         env:
@@ -73,10 +42,9 @@ jobs:
           if-no-files-found: warn
 
   # ------------------------------------------------------------
-  # 3. BUILD ANDROID .APK PACKAGE (Using Java 21 for Capacitor 7)
+  # 2. BUILD ANDROID .APK PACKAGE (Java 21 for Capacitor 7)
   # ------------------------------------------------------------
   build-android-apk:
-    needs: build-web
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -97,52 +65,32 @@ jobs:
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
-      - name: Download Web Dist
-        uses: actions/download-artifact@v4
-        with:
-          name: web-dist
-          path: dist/
-
       - name: Install Dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Setup Capacitor & Android Project
+      - name: Build Web Assets & Sync Android
         run: |
-          # If gradlew is missing or android directory is incomplete, re-add clean Android platform
+          npm run build
           if [ ! -f "android/gradlew" ]; then
-            echo "gradlew not found in android directory. Cleaning and re-adding Android platform..."
+            echo "Regenerating Android platform..."
             rm -rf android
             npx cap add android
           fi
           npx cap sync android
-          # Ensure cleartext network permissions and camera permissions are present in AndroidManifest
           sed -i 's/<application/<application android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml 2>/dev/null || true
-          grep -q "android.permission.CAMERA" android/app/src/main/AndroidManifest.xml || sed -i 's/<\/manifest>/    <uses-permission android:name="android.permission.CAMERA" \/>\n<\/manifest>/' android/app/src/main/AndroidManifest.xml 2>/dev/null || true
-
-          # Ensure MainActivity has WindowCompat.setDecorFitsSystemWindows so status bar icons never overlap UI
-          mkdir -p android/app/src/main/java/com/syncwave/ai
-          node -e '
-            const fs = require("fs");
-            const file = "android/app/src/main/java/com/syncwave/ai/MainActivity.java";
-            const code = "package com.syncwave.ai;\n\nimport android.os.Bundle;\nimport androidx.core.view.WindowCompat;\nimport com.getcapacitor.BridgeActivity;\n\npublic class MainActivity extends BridgeActivity {\n    @Override\n    public void onCreate(Bundle savedInstanceState) {\n        super.onCreate(savedInstanceState);\n        WindowCompat.setDecorFitsSystemWindows(getWindow(), true);\n    }\n}\n";
-            fs.writeFileSync(file, code);
-          '
-
 
       - name: Build Debug APK via Gradle
         run: |
           cd android
           if [ -f "./gradlew" ]; then
             chmod +x ./gradlew
-            ./gradlew assembleDebug --no-daemon --stacktrace
+            ./gradlew assembleDebug --no-daemon
           elif command -v gradle &> /dev/null; then
-            echo "gradlew missing, assembling debug APK with system Gradle..."
-            gradle assembleDebug --no-daemon --stacktrace
+            gradle assembleDebug --no-daemon
           else
-            echo "Generating Gradle wrapper..."
             gradle wrapper
             chmod +x ./gradlew
-            ./gradlew assembleDebug --no-daemon --stacktrace
+            ./gradlew assembleDebug --no-daemon
           fi
 
       - name: Upload Android APK Artifact
@@ -153,7 +101,7 @@ jobs:
           if-no-files-found: warn
 
   # ------------------------------------------------------------
-  # 4. CREATE GITHUB RELEASE WITH DIRECT DOWNLOADS
+  # 3. CREATE GITHUB RELEASE WITH DIRECT DOWNLOADS
   # ------------------------------------------------------------
   publish-release:
     needs: [build-windows-exe, build-android-apk]
@@ -186,7 +134,7 @@ jobs:
           name: SyncWave Studio v1.0.${{ github.run_number }} (EXE & APK)
           body: |
             ## SyncWave Studio Binary Downloads ⚡
-            - **Windows**: `SyncWave-Studio-Setup.exe` (Windows desktop standalone installer)
+            - **Windows**: `SyncWave Studio Setup.exe` (Windows desktop standalone installer)
             - **Android**: `app-debug.apk` (Android mobile APK)
             - Real-time synchronization active across devices using NVIDIA NIM API.
           files: |
