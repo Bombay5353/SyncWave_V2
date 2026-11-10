@@ -8,12 +8,17 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # ------------------------------------------------------------
   # 1. BUILD WEB ASSETS (Cross-platform HTML/JS/CSS bundle)
   # ------------------------------------------------------------
   build-web:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -42,6 +47,7 @@ jobs:
   build-windows-exe:
     needs: [build-web]
     runs-on: windows-latest
+    timeout-minutes: 25
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -78,6 +84,7 @@ jobs:
   build-android-apk:
     needs: [build-web]
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4

@@ -111,6 +111,7 @@ export default function App() {
             activeConversationId={activeConversationId}
             setActiveConversationId={setActiveConversationId}
             settings={settings}
+            updateSettings={updateSettings}
             onSendToCodex={handleSendToCodex}
           />
         )}
@@ -122,6 +123,7 @@ export default function App() {
             activeSnippetId={activeSnippetId}
             setActiveSnippetId={setActiveSnippetId}
             settings={settings}
+            updateSettings={updateSettings}
           />
         )}
 

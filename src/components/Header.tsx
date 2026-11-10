@@ -45,7 +45,7 @@ export const Header: React.FC<HeaderProps> = ({
           <span className="w-2.5 h-2.5 rounded-full bg-[#76b900] shadow-[0_0_8px_#76b900]" />
           <span>SyncWave</span>
           <span className="text-[10px] sm:text-xs font-mono font-medium text-[#76b900] px-1.5 py-0.5 rounded bg-[#76b900]/10 border border-[#76b900]/20 hidden sm:inline">
-            NVIDIA NIM
+            Multi-LLM
           </span>
         </a>
       </div>
@@ -155,7 +155,7 @@ export const Header: React.FC<HeaderProps> = ({
           }`}
         >
           <Key className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">{apiKeySet ? 'NVIDIA Key Active' : 'API Key'}</span>
+          <span className="hidden sm:inline">{apiKeySet ? 'API Key Active' : 'API Key'}</span>
           <span className="sm:hidden">{apiKeySet ? 'Active' : 'Key'}</span>
         </button>
       </div>

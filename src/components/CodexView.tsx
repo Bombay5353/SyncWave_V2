@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { CodexSnippet, AppSettings } from '../types';
-import { streamChatCompletion } from '../services/nvidiaApi';
+import { CodexSnippet, AppSettings, AiSkill } from '../types';
+import { streamChatCompletion, DEFAULT_SKILLS } from '../services/nvidiaApi';
+import { MemorySkillsModal } from './MemorySkillsModal';
 import {
   Play,
   RotateCw,
@@ -17,6 +18,10 @@ import {
   Layers,
   Code,
   Eye,
+  Zap,
+  ChevronDown,
+  Brain,
+  Sliders,
 } from 'lucide-react';
 
 interface CodexViewProps {
@@ -25,6 +30,7 @@ interface CodexViewProps {
   activeSnippetId: string;
   setActiveSnippetId: (id: string) => void;
   settings: AppSettings;
+  updateSettings?: (partial: Partial<AppSettings>) => void;
 }
 
 export const CodexView: React.FC<CodexViewProps> = ({
@@ -33,6 +39,7 @@ export const CodexView: React.FC<CodexViewProps> = ({
   activeSnippetId,
   setActiveSnippetId,
   settings,
+  updateSettings,
 }) => {
   const [copied, setCopied] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
@@ -44,11 +51,19 @@ export const CodexView: React.FC<CodexViewProps> = ({
     settings.defaultModel || 'qwen/qwen2.5-coder-32b-instruct'
   );
 
+  // Skill Dropdown & Modal State
+  const [showSkillDropdown, setShowSkillDropdown] = useState(false);
+  const [showSkillModal, setShowSkillModal] = useState(false);
+
   // Mobile segmented view state: 'files' | 'editor' | 'preview'
   const [mobilePane, setMobilePane] = useState<'files' | 'editor' | 'preview'>('editor');
 
   const activeSnippet =
     snippets.find((s) => s.id === activeSnippetId) || snippets[0];
+
+  const currentSkills: AiSkill[] = settings.skills || DEFAULT_SKILLS;
+  const activeSkills = currentSkills.filter((s) => s.isActive);
+  const primarySkill = activeSkills[0] || currentSkills[0];
 
   const handleAddSnippet = () => {
     const newId = `s-${Date.now()}`;
@@ -117,7 +132,7 @@ export const CodexView: React.FC<CodexViewProps> = ({
 
     setActiveRightTab('terminal');
     setMobilePane('preview');
-    setConsoleOutput([`[NVIDIA Codex Runner] Executing ${activeSnippet.title}...`]);
+    setConsoleOutput([`[Codex Runner] Executing ${activeSnippet.title}...`]);
 
     try {
       if (activeSnippet.language === 'javascript' || activeSnippet.language === 'typescript') {
@@ -146,16 +161,16 @@ export const CodexView: React.FC<CodexViewProps> = ({
         setTimeout(() => {
           setConsoleOutput((prev) => [
             ...prev,
-            `Python 3.11.8 (NVIDIA NIM Environment)`,
-            `Connecting to https://integrate.api.nvidia.com/v1...`,
-            `Model loaded: ${settings.defaultModel}`,
+            `Python 3.11.8 Runtime`,
+            `Connected to ${settings.baseUrl}...`,
+            `Model active: ${settings.defaultModel}`,
             `Process finished with exit code 0`,
           ]);
         }, 200);
       } else {
         setConsoleOutput((prev) => [
           ...prev,
-          `File type: ${activeSnippet.language}. Code validated syntax clean.`,
+          `File type: ${activeSnippet.language}. Code syntax validated.`,
         ]);
       }
     } catch (err: any) {
@@ -166,11 +181,79 @@ export const CodexView: React.FC<CodexViewProps> = ({
     }
   };
 
+  // Apply Skill to Code Snippet
+  const handleApplySkill = async (skill: AiSkill) => {
+    if (!activeSnippet || isGenerating) return;
+
+    setShowSkillDropdown(false);
+    setIsGenerating(true);
+
+    const isAuditOrReview = skill.category === 'analysis' || skill.name.toLowerCase().includes('review');
+
+    if (isAuditOrReview) {
+      setActiveRightTab('terminal');
+      setMobilePane('preview');
+      setConsoleOutput([`[Skill: ${skill.name}] Auditing ${activeSnippet.title}...`]);
+    }
+
+    let knowledgeClause = '';
+    if (skill.referenceKnowledge && skill.referenceKnowledge.trim()) {
+      knowledgeClause = `\n\nReference Guidelines/Rules:\n${skill.referenceKnowledge.trim()}`;
+    }
+
+    const promptText = isAuditOrReview
+      ? `System Directive: ${skill.systemPromptAddition}${knowledgeClause}\n\nPlease audit and review this code snippet thoroughly. Inspect subtle bugs, race conditions, type safety, security flaws, and performance. Provide clear fixes:\n\nFile: ${activeSnippet.title} (${activeSnippet.language})\n\`\`\`${activeSnippet.language}\n${activeSnippet.code}\n\`\`\``
+      : `System Directive: ${skill.systemPromptAddition}${knowledgeClause}\n\nRefactor, enhance, and optimize this code according to your skill directives. Return ONLY the complete refactored code without conversational markdown filler:\n\nFile: ${activeSnippet.title} (${activeSnippet.language})\n\`\`\`${activeSnippet.language}\n${activeSnippet.code}\n\`\`\``;
+
+    await streamChatCompletion({
+      apiKey: settings.apiKey,
+      baseUrl: settings.baseUrl,
+      model: codexModel.trim() || settings.defaultModel || 'qwen/qwen2.5-coder-32b-instruct',
+      messages: [{ role: 'user', content: promptText }],
+      temperature: 0.2,
+      topP: 0.8,
+      maxTokens: 2048,
+      onChunk: (chunk) => {
+        if (isAuditOrReview) {
+          setConsoleOutput([`[Skill: ${skill.name}] Audit in progress...`, chunk]);
+        } else {
+          let clean = chunk;
+          if (clean.includes('```')) {
+            const match = clean.match(/```(?:[a-z]+)?\n([\s\S]*?)(?:```|$)/);
+            if (match && match[1]) {
+              clean = match[1];
+            }
+          }
+          handleCodeChange(clean);
+        }
+      },
+      onFinish: (full) => {
+        if (isAuditOrReview) {
+          setConsoleOutput([`[Skill: ${skill.name}] Audit Complete:`, full]);
+        } else {
+          let clean = full;
+          if (clean.includes('```')) {
+            const match = clean.match(/```(?:[a-z]+)?\n([\s\S]*?)(?:```|$)/);
+            if (match && match[1]) {
+              clean = match[1];
+            }
+          }
+          handleCodeChange(clean);
+        }
+        setIsGenerating(false);
+      },
+      onError: (err) => {
+        alert(`Skill execution error: ${err}`);
+        setIsGenerating(false);
+      },
+    });
+  };
+
   const handleAiTransform = async () => {
     if (!aiPrompt.trim() || isGenerating || !activeSnippet) return;
 
     setIsGenerating(true);
-    const instruction = `You are NVIDIA NIM Codex. Take this existing code and user prompt, and return ONLY the updated code without conversational preamble:\n\nUser Request: ${aiPrompt}\nCurrent File: ${activeSnippet.title} (${activeSnippet.language})\n\nExisting Code:\n\`\`\`${activeSnippet.language}\n${activeSnippet.code}\n\`\`\``;
+    const instruction = `You are the Codex Assistant. Take this existing code and user prompt, and return ONLY the updated code without conversational preamble:\n\nUser Request: ${aiPrompt}\nCurrent File: ${activeSnippet.title} (${activeSnippet.language})\n\nExisting Code:\n\`\`\`${activeSnippet.language}\n${activeSnippet.code}\n\`\`\``;
 
     await streamChatCompletion({
       apiKey: settings.apiKey,
@@ -211,6 +294,17 @@ export const CodexView: React.FC<CodexViewProps> = ({
 
   return (
     <div className="flex flex-col lg:flex-row flex-1 h-[calc(100dvh-57px)] w-full overflow-hidden bg-[#070a11] pb-16 md:pb-0">
+      {/* Skills Modal */}
+      {updateSettings && (
+        <MemorySkillsModal
+          isOpen={showSkillModal}
+          onClose={() => setShowSkillModal(false)}
+          settings={settings}
+          updateSettings={updateSettings}
+          initialTab="skills"
+        />
+      )}
+
       {/* Mobile Top Segmented Selector (Visible only on < lg screens) */}
       <div className="lg:hidden flex items-center justify-between p-2 bg-[#090d16] border-b border-slate-800 shrink-0">
         <div className="flex items-center gap-1 bg-slate-900 p-0.5 rounded-lg border border-slate-800 text-xs w-full max-w-sm mx-auto">
@@ -244,7 +338,7 @@ export const CodexView: React.FC<CodexViewProps> = ({
         </div>
       </div>
 
-      {/* Pane 1: Left Files Sidebar (Always shown on desktop, conditioned on mobile) */}
+      {/* Pane 1: Left Files Sidebar */}
       <div
         className={`${
           mobilePane === 'files' ? 'flex' : 'hidden lg:flex'
@@ -302,13 +396,13 @@ export const CodexView: React.FC<CodexViewProps> = ({
         </div>
       </div>
 
-      {/* Pane 2: Center Code Editor (Always shown on desktop, conditioned on mobile) */}
+      {/* Pane 2: Center Code Editor */}
       <div
         className={`${
           mobilePane === 'editor' ? 'flex' : 'hidden lg:flex'
         } flex-1 flex-col border-r border-slate-800/80 bg-[#090d16] min-w-0 h-full overflow-hidden`}
       >
-        {/* Editor Toolbar */}
+        {/* Editor Toolbar with Claude Skills Integration */}
         <div className="h-11 border-b border-slate-800/80 flex items-center justify-between px-3 bg-slate-900/60 shrink-0 gap-2">
           <div className="flex items-center gap-1.5 min-w-0">
             <input
@@ -320,7 +414,7 @@ export const CodexView: React.FC<CodexViewProps> = ({
                   prev.map((s) => (s.id === activeSnippet?.id ? { ...s, title: val } : s))
                 );
               }}
-              className="bg-transparent text-xs font-mono font-medium text-white focus:outline-none focus:bg-slate-800 px-1.5 py-0.5 rounded truncate max-w-[120px] sm:max-w-none"
+              className="bg-transparent text-xs font-mono font-medium text-white focus:outline-none focus:bg-slate-800 px-1.5 py-0.5 rounded truncate max-w-[110px] sm:max-w-none"
             />
             <select
               value={activeSnippet?.language || 'typescript'}
@@ -341,17 +435,65 @@ export const CodexView: React.FC<CodexViewProps> = ({
               <option value="json">JSON</option>
             </select>
 
-            {/* Model User Input */}
-            <div className="hidden sm:flex items-center bg-slate-900 border border-slate-800 rounded px-1.5 py-0.5 focus-within:border-[#76b900] transition-colors">
-              <span className="text-[10px] text-slate-500 font-mono mr-1">model:</span>
-              <input
-                type="text"
-                value={codexModel}
-                onChange={(e) => setCodexModel(e.target.value)}
-                placeholder="e.g. qwen/qwen2.5-coder-32b-instruct"
-                className="bg-transparent text-[10px] font-mono text-slate-200 focus:outline-none w-28 sm:w-44 truncate"
-                title="Codex Model Name (User Input)"
-              />
+            {/* Apply Claude Skill Button */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowSkillDropdown(!showSkillDropdown)}
+                disabled={isGenerating}
+                className="flex items-center gap-1 px-2 py-0.5 rounded bg-[#76b900]/15 border border-[#76b900]/30 hover:bg-[#76b900]/25 text-[10px] sm:text-[11px] font-medium text-[#76b900] transition-colors"
+                title="Apply specialized Claude skill directly to this snippet"
+              >
+                <Zap className="w-3 h-3" />
+                <span className="hidden sm:inline">Apply Skill</span>
+                <span className="sm:hidden">Skill</span>
+                <ChevronDown className="w-3 h-3" />
+              </button>
+
+              {/* Skills Dropdown */}
+              {showSkillDropdown && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowSkillDropdown(false)} />
+                  <div className="absolute top-full left-0 mt-1 w-64 rounded-xl bg-[#090d16] border border-slate-800 shadow-2xl z-50 p-1.5 space-y-1">
+                    <div className="px-2 py-1 text-[10px] uppercase font-semibold text-slate-400">
+                      Apply Skill to Snippet
+                    </div>
+                    {currentSkills.map((sk) => (
+                      <button
+                        key={sk.id}
+                        type="button"
+                        onClick={() => handleApplySkill(sk)}
+                        className="w-full text-left p-2 rounded-lg text-xs hover:bg-slate-800/80 transition-colors flex items-center justify-between text-slate-200"
+                      >
+                        <div className="truncate">
+                          <div className="font-semibold text-xs flex items-center gap-1.5">
+                            <span>{sk.name}</span>
+                            {sk.triggerKeyword && (
+                              <span className="text-[9px] text-[#76b900] font-mono">/{sk.triggerKeyword}</span>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-slate-400 truncate">{sk.description}</div>
+                        </div>
+                        <Zap className="w-3 h-3 text-[#76b900] shrink-0" />
+                      </button>
+                    ))}
+                    {updateSettings && (
+                      <div className="pt-1 border-t border-slate-800 px-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowSkillDropdown(false);
+                            setShowSkillModal(true);
+                          }}
+                          className="w-full text-center py-1 text-[11px] text-[#76b900] hover:underline"
+                        >
+                          + Create / Manage Skills
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
@@ -389,7 +531,7 @@ export const CodexView: React.FC<CodexViewProps> = ({
             value={aiPrompt}
             onChange={(e) => setAiPrompt(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleAiTransform()}
-            placeholder="AI Codex: 'Optimize loop', 'Add types'..."
+            placeholder="AI Codex: 'Optimize loop', 'Add types', 'Write unit tests'..."
             className="flex-1 bg-slate-950 text-xs text-white placeholder-slate-500 px-2.5 py-1.5 rounded-lg border border-slate-800 focus:outline-none focus:border-[#76b900] min-w-0"
           />
           <button
@@ -422,7 +564,7 @@ export const CodexView: React.FC<CodexViewProps> = ({
         </div>
       </div>
 
-      {/* Pane 3: Right Live Sandbox & Console (Always shown on desktop, conditioned on mobile) */}
+      {/* Pane 3: Right Live Sandbox & Console */}
       <div
         className={`${
           mobilePane === 'preview' ? 'flex' : 'hidden lg:flex'
@@ -473,7 +615,7 @@ export const CodexView: React.FC<CodexViewProps> = ({
                 <SplitSquareVertical className="w-8 h-8 text-slate-600 mb-2" />
                 <p className="font-medium text-slate-300">Live Preview Ready</p>
                 <p className="text-[11px] leading-relaxed max-w-xs">
-                  For interactive visual rendering, select an HTML file or switch to <strong>Terminal</strong> to execute code.
+                  For interactive visual rendering, select an HTML file or switch to <strong>Terminal</strong> to execute code or view AI skill audits.
                 </p>
                 <button
                   onClick={() => {
@@ -490,10 +632,10 @@ export const CodexView: React.FC<CodexViewProps> = ({
             <div className="h-full bg-black font-mono text-xs p-3 overflow-y-auto text-emerald-400 space-y-1">
               <div className="flex items-center gap-2 text-slate-500 pb-2 border-b border-slate-900 mb-2 text-[11px]">
                 <Terminal className="w-3.5 h-3.5" />
-                <span>NVIDIA NIM Sandbox Shell</span>
+                <span>Codex Shell & AI Skill Output</span>
               </div>
               {consoleOutput.length === 0 ? (
-                <div className="text-slate-600 italic">Click 'Run' to execute.</div>
+                <div className="text-slate-600 italic">Click 'Run' or 'Apply Skill' to inspect output.</div>
               ) : (
                 consoleOutput.map((line, idx) => (
                   <div key={idx} className="whitespace-pre-wrap leading-relaxed">

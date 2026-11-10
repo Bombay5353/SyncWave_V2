@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Conversation, CodexSnippet, SyncState, AppSettings } from '../types';
+import { DEFAULT_SKILLS, DEFAULT_MEMORIES } from '../services/nvidiaApi';
 
 const STORAGE_KEY_ROOM = 'syncwave_room_id';
 const STORAGE_KEY_SETTINGS = 'syncwave_settings';
@@ -54,6 +55,12 @@ export function useSyncEngine() {
           if (parsed.defaultModel === 'meta/llama-3.3-70b-instruct') {
             parsed.defaultModel = 'nvidia/llama-3.1-nemotron-70b-instruct';
           }
+          if (!parsed.skills || parsed.skills.length === 0) {
+            parsed.skills = DEFAULT_SKILLS;
+          }
+          if (!parsed.memories || parsed.memories.length === 0) {
+            parsed.memories = DEFAULT_MEMORIES;
+          }
           return parsed;
         } catch (e) {}
       }
@@ -65,9 +72,11 @@ export function useSyncEngine() {
       temperature: 0.6,
       topP: 0.9,
       maxTokens: 2048,
-      systemPrompt: 'You are an expert AI software engineer and problem solver powered by NVIDIA NIM.',
+      systemPrompt: 'You are an expert AI software engineer and problem solver.',
       syncRoomId: roomId,
       deviceName: getDevicePlatform(),
+      skills: DEFAULT_SKILLS,
+      memories: DEFAULT_MEMORIES,
     };
   });
 

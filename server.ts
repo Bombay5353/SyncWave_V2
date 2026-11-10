@@ -99,42 +99,75 @@ runInference();`,
   return syncRooms.get(roomId)!;
 }
 
-// NVIDIA NIM Chat Completions Proxy
+// Universal LLM Chat Completions Proxy (NVIDIA, OpenAI, Claude, Grok, Perplexity, Groq, DeepSeek)
 app.post('/api/chat', async (req: Request, res: Response) => {
-  const apiKey = (req.headers['x-nvidia-api-key'] as string) || process.env.NVIDIA_API_KEY || '';
+  const authHeader = (req.headers['authorization'] as string) || '';
+  const bearerKey = authHeader.replace(/^Bearer\s+/i, '');
+  const apiKey = (req.headers['x-nvidia-api-key'] as string) || bearerKey || process.env.NVIDIA_API_KEY || '';
   const baseUrl = (req.headers['x-nvidia-base-url'] as string) || 'https://integrate.api.nvidia.com/v1';
   const { model, messages, temperature = 0.5, top_p = 0.9, max_tokens = 2048, stream = true } = req.body;
 
-  if (!apiKey) {
+  const cleanBaseUrl = baseUrl.replace(/\/+$/, '');
+  const isLocal = cleanBaseUrl.includes('localhost') || cleanBaseUrl.includes('127.0.0.1');
+
+  if (!apiKey && !isLocal) {
     res.status(400).json({
-      error: 'NVIDIA API Key missing. Please provide your API key in the top settings header.',
+      error: 'API Key missing. Please provide your API key in Settings.',
     });
     return;
   }
 
-  // Automatically migrate retired EOL model
-  const effectiveModel = !model || model === 'meta/llama-3.3-70b-instruct'
+  // Automatically migrate retired EOL model on NVIDIA
+  const effectiveModel = !model || (model === 'meta/llama-3.3-70b-instruct' && cleanBaseUrl.includes('nvidia.com'))
     ? 'nvidia/llama-3.1-nemotron-70b-instruct'
     : model;
 
   try {
-    const cleanBaseUrl = baseUrl.replace(/\/+$/, '');
-    const targetUrl = `${cleanBaseUrl}/chat/completions`;
+    const isAnthropicDirect = cleanBaseUrl.includes('api.anthropic.com');
+    let targetUrl: string;
+    let headers: Record<string, string>;
+    let bodyPayload: string;
 
-    const response = await fetch(targetUrl, {
-      method: 'POST',
-      headers: {
+    if (isAnthropicDirect) {
+      targetUrl = `${cleanBaseUrl}/messages`;
+      headers = {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey.trim(),
+        'anthropic-version': '2023-06-01',
+      };
+      const systemMessage = Array.isArray(messages) ? messages.find((m: any) => m.role === 'system')?.content || '' : '';
+      const conversationMessages = Array.isArray(messages)
+        ? messages.filter((m: any) => m.role !== 'system').map((m: any) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content }))
+        : [];
+      bodyPayload = JSON.stringify({
+        model: effectiveModel,
+        messages: conversationMessages,
+        system: systemMessage,
+        temperature,
+        top_p,
+        max_tokens,
+        stream,
+      });
+    } else {
+      targetUrl = `${cleanBaseUrl}/chat/completions`;
+      headers = {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey.trim()}`,
-      },
-      body: JSON.stringify({
+      };
+      bodyPayload = JSON.stringify({
         model: effectiveModel,
         messages,
         temperature,
         top_p,
         max_tokens,
         stream,
-      }),
+      });
+    }
+
+    const response = await fetch(targetUrl, {
+      method: 'POST',
+      headers,
+      body: bodyPayload,
     });
 
     if (!response.ok) {
